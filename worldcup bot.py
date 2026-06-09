@@ -18,7 +18,9 @@ from telegram.ext import (
 # ─────────────────────────────────────────────
 # CONFIG — replace with your BotFather token
 # ─────────────────────────────────────────────
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"
+import os
+BOT_TOKEN = os.environ.get("8944044991:AAGZW_v93MqR2VpEkndlOcURzaQYj1H84dI")
+
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
