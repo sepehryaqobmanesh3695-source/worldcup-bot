@@ -1,272 +1,276 @@
 #!/usr/bin/env python3
-"""
-🏆 World Cup 2026 Telegram Bot
-Shows all 48 teams and their group stage schedules with match times and stadiums.
-
-Usage:
-  1. pip install python-telegram-bot
-  2. Set your bot token: BOT_TOKEN = "YOUR_TOKEN_HERE"
-  3. python worldcup_bot.py
-"""
-
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import os
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ChatMember
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes
 )
 
-# ─────────────────────────────────────────────
-# CONFIG — replace with your BotFather token
-# ─────────────────────────────────────────────
-import os
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-
-
+CHANNEL_ID = "@iFootBad"
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-# ─────────────────────────────────────────────
-# DATA — Group Stage schedules (all times ET)
-# ─────────────────────────────────────────────
 GROUPS = {
-    "A": ["🇲🇽 Mexico", "🇿🇦 South Africa", "🇰🇷 South Korea", "🇨🇿 Czechia"],
-    "B": ["🇨🇦 Canada", "🇧🇦 Bosnia & Herzegovina", "🇶🇦 Qatar", "🇨🇭 Switzerland"],
-    "C": ["🇧🇷 Brazil", "🇲🇦 Morocco", "🇭🇹 Haiti", "🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland"],
-    "D": ["🇺🇸 USA", "🇵🇾 Paraguay", "🇦🇺 Australia", "🇹🇷 Türkiye"],
-    "E": ["🇩🇪 Germany", "🇨🇼 Curaçao", "🇨🇮 Ivory Coast", "🇪🇨 Ecuador"],
-    "F": ["🇳🇱 Netherlands", "🇯🇵 Japan", "🇸🇪 Sweden", "🇹🇳 Tunisia"],
-    "G": ["🇧🇪 Belgium", "🇪🇬 Egypt", "🇮🇷 Iran", "🇳🇿 New Zealand"],
-    "H": ["🇪🇸 Spain", "🇨🇻 Cape Verde", "🇸🇦 Saudi Arabia", "🇺🇾 Uruguay"],
-    "I": ["🇫🇷 France", "🇸🇳 Senegal", "🇮🇶 Iraq", "🇳🇴 Norway"],
-    "J": ["🇦🇷 Argentina", "🇩🇿 Algeria", "🇦🇹 Austria", "🇯🇴 Jordan"],
-    "K": ["🇵🇹 Portugal", "🇨🇩 DR Congo", "🇺🇿 Uzbekistan", "🇨🇴 Colombia"],
-    "L": ["🏴󠁧󠁢󠁥󠁮󠁧󠁿 England", "🇭🇷 Croatia", "🇬🇭 Ghana", "🇵🇦 Panama"],
+    "A": ["🇲🇽 مکزیک", "🇿🇦 آفریقای جنوبی", "🇰🇷 کره جنوبی", "🇨🇿 چک"],
+    "B": ["🇨🇦 کانادا", "🇧🇦 بوسنی و هرزگوین", "🇶🇦 قطر", "🇨🇭 سوئیس"],
+    "C": ["🇧🇷 برزیل", "🇲🇦 مراکش", "🇭🇹 هائیتی", "🏴󠁧󠁢󠁳󠁣󠁴󠁿 اسکاتلند"],
+    "D": ["🇺🇸 آمریکا", "🇵🇾 پاراگوئه", "🇦🇺 استرالیا", "🇹🇷 ترکیه"],
+    "E": ["🇩🇪 آلمان", "🇨🇼 کوراسائو", "🇨🇮 ساحل عاج", "🇪🇨 اکوادور"],
+    "F": ["🇳🇱 هلند", "🇯🇵 ژاپن", "🇸🇪 سوئد", "🇹🇳 تونس"],
+    "G": ["🇧🇪 بلژیک", "🇪🇬 مصر", "🇮🇷 ایران", "🇳🇿 نیوزیلند"],
+    "H": ["🇪🇸 اسپانیا", "🇨🇻 کیپ ورد", "🇸🇦 عربستان سعودی", "🇺🇾 اروگوئه"],
+    "I": ["🇫🇷 فرانسه", "🇸🇳 سنگال", "🇮🇶 عراق", "🇳🇴 نروژ"],
+    "J": ["🇦🇷 آرژانتین", "🇩🇿 الجزایر", "🇦🇹 اتریش", "🇯🇴 اردن"],
+    "K": ["🇵🇹 پرتغال", "🇨🇩 کنگو", "🇺🇿 ازبکستان", "🇨🇴 کلمبیا"],
+    "L": ["🏴󠁧󠁢󠁥󠁮󠁧󠁿 انگلیس", "🇭🇷 کرواسی", "🇬🇭 غنا", "🇵🇦 پاناما"],
 }
 
-# Each match: (date, time_ET, home, away, stadium, city)
+FA_TO_EN = {
+    "مکزیک": "Mexico", "آفریقای جنوبی": "South Africa", "کره جنوبی": "South Korea", "چک": "Czechia",
+    "کانادا": "Canada", "بوسنی و هرزگوین": "Bosnia", "قطر": "Qatar", "سوئیس": "Switzerland",
+    "برزیل": "Brazil", "مراکش": "Morocco", "هائیتی": "Haiti", "اسکاتلند": "Scotland",
+    "آمریکا": "USA", "پاراگوئه": "Paraguay", "استرالیا": "Australia", "ترکیه": "Turkiye",
+    "آلمان": "Germany", "کوراسائو": "Curacao", "ساحل عاج": "Ivory Coast", "اکوادور": "Ecuador",
+    "هلند": "Netherlands", "ژاپن": "Japan", "سوئد": "Sweden", "تونس": "Tunisia",
+    "بلژیک": "Belgium", "مصر": "Egypt", "ایران": "Iran", "نیوزیلند": "New Zealand",
+    "اسپانیا": "Spain", "کیپ ورد": "Cape Verde", "عربستان سعودی": "Saudi Arabia", "اروگوئه": "Uruguay",
+    "فرانسه": "France", "سنگال": "Senegal", "عراق": "Iraq", "نروژ": "Norway",
+    "آرژانتین": "Argentina", "الجزایر": "Algeria", "اتریش": "Austria", "اردن": "Jordan",
+    "پرتغال": "Portugal", "کنگو": "DR Congo", "ازبکستان": "Uzbekistan", "کلمبیا": "Colombia",
+    "انگلیس": "England", "کرواسی": "Croatia", "غنا": "Ghana", "پاناما": "Panama",
+}
+
+EN_TO_FA = {v: k for k, v in FA_TO_EN.items()}
+
+def et_to_iran(time_et: str) -> str:
+    try:
+        from datetime import datetime, timedelta
+        t = datetime.strptime(time_et, "%I:%M %p")
+        iran_t = t + timedelta(hours=7, minutes=30)
+        result = iran_t.strftime("%H:%M")
+        if iran_t.day != t.day:
+            return result + " (روز بعد)"
+        return result
+    except:
+        return time_et
+
+# date, time_ET, home_EN, away_EN, stadium_FA, city_FA
 MATCHES = [
-    # GROUP A
-    ("Thu Jun 11", "3:00 PM ET",  "Mexico",       "South Africa", "Estadio Azteca",          "Mexico City, Mexico"),
-    ("Thu Jun 11", "10:00 PM ET", "South Korea",  "Czechia",      "Estadio Akron",            "Zapopan, Mexico"),
-    ("Thu Jun 18", "12:00 PM ET", "Czechia",      "South Africa", "Mercedes-Benz Stadium",    "Atlanta, USA"),
-    ("Thu Jun 18", "9:00 PM ET",  "Mexico",       "South Korea",  "Estadio Akron",            "Zapopan, Mexico"),
-    ("Wed Jun 24", "9:00 PM ET",  "Czechia",      "Mexico",       "Estadio Azteca",           "Mexico City, Mexico"),
-    ("Wed Jun 24", "9:00 PM ET",  "South Africa", "South Korea",  "Estadio BBVA",             "Monterrey, Mexico"),
-    # GROUP B
-    ("Fri Jun 12", "3:00 PM ET",  "Canada",       "Bosnia & Herzegovina", "BMO Field",        "Toronto, Canada"),
-    ("Sat Jun 13", "3:00 PM ET",  "Qatar",        "Switzerland",  "Levi's Stadium",           "Santa Clara, USA"),
-    ("Thu Jun 18", "3:00 PM ET",  "Switzerland",  "Bosnia & Herzegovina", "SoFi Stadium",     "Inglewood, USA"),
-    ("Thu Jun 18", "6:00 PM ET",  "Canada",       "Qatar",        "BC Place",                 "Vancouver, Canada"),
-    ("Wed Jun 24", "3:00 PM ET",  "Switzerland",  "Canada",       "BC Place",                 "Vancouver, Canada"),
-    ("Wed Jun 24", "3:00 PM ET",  "Bosnia & Herzegovina", "Qatar", "Lumen Field",             "Seattle, USA"),
-    # GROUP C
-    ("Sat Jun 13", "6:00 PM ET",  "Brazil",       "Morocco",      "MetLife Stadium",          "East Rutherford, USA"),
-    ("Sat Jun 13", "9:00 PM ET",  "Haiti",        "Scotland",     "Gillette Stadium",         "Foxborough, USA"),
-    ("Fri Jun 19", "6:00 PM ET",  "Scotland",     "Morocco",      "Gillette Stadium",         "Foxborough, USA"),
-    ("Fri Jun 19", "8:30 PM ET",  "Brazil",       "Haiti",        "Lincoln Financial Field",  "Philadelphia, USA"),
-    ("Wed Jun 24", "6:00 PM ET",  "Scotland",     "Brazil",       "Hard Rock Stadium",        "Miami Gardens, USA"),
-    ("Wed Jun 24", "6:00 PM ET",  "Morocco",      "Haiti",        "Mercedes-Benz Stadium",    "Atlanta, USA"),
-    # GROUP D
-    ("Sun Jun 14", "12:00 PM ET", "Australia",    "Türkiye",      "BC Place",                 "Vancouver, Canada"),
-    ("Fri Jun 12", "9:00 PM ET",  "USA",          "Paraguay",     "SoFi Stadium",             "Inglewood, USA"),
-    ("Fri Jun 19", "3:00 PM ET",  "USA",          "Australia",    "Lumen Field",              "Seattle, USA"),
-    ("Fri Jun 19", "11:00 PM ET", "Türkiye",      "Paraguay",     "Levi's Stadium",           "Santa Clara, USA"),
-    ("Thu Jun 25", "10:00 PM ET", "Türkiye",      "USA",          "SoFi Stadium",             "Inglewood, USA"),
-    ("Thu Jun 25", "10:00 PM ET", "Paraguay",     "Australia",    "Levi's Stadium",           "Santa Clara, USA"),
-    # GROUP E
-    ("Sun Jun 14", "1:00 PM ET",  "Germany",      "Curaçao",      "NRG Stadium",              "Houston, USA"),
-    ("Sun Jun 14", "7:00 PM ET",  "Ivory Coast",  "Ecuador",      "Lincoln Financial Field",  "Philadelphia, USA"),
-    ("Sat Jun 20", "1:00 PM ET",  "Netherlands",  "Sweden",       "NRG Stadium",              "Houston, USA"),
-    ("Sat Jun 20", "4:00 PM ET",  "Germany",      "Ivory Coast",  "BMO Field",                "Toronto, Canada"),
-    ("Sat Jun 20", "8:00 PM ET",  "Ecuador",      "Curaçao",      "Arrowhead Stadium",        "Kansas City, USA"),
-    ("Thu Jun 25", "4:00 PM ET",  "Curaçao",      "Ivory Coast",  "Lincoln Financial Field",  "Philadelphia, USA"),
-    ("Thu Jun 25", "4:00 PM ET",  "Ecuador",      "Germany",      "MetLife Stadium",          "East Rutherford, USA"),
-    # GROUP F
-    ("Sun Jun 14", "4:00 PM ET",  "Netherlands",  "Japan",        "AT&T Stadium",             "Arlington, USA"),
-    ("Sun Jun 14", "10:00 PM ET", "Sweden",       "Tunisia",      "Estadio BBVA",             "Monterrey, Mexico"),
-    ("Sat Jun 20", "1:00 PM ET",  "Netherlands",  "Sweden",       "NRG Stadium",              "Houston, USA"),
-    ("Sun Jun 21", "12:00 AM ET", "Tunisia",      "Japan",        "Estadio BBVA",             "Monterrey, Mexico"),
-    ("Thu Jun 25", "7:00 PM ET",  "Japan",        "Sweden",       "AT&T Stadium",             "Arlington, USA"),
-    ("Thu Jun 25", "7:00 PM ET",  "Tunisia",      "Netherlands",  "Arrowhead Stadium",        "Kansas City, USA"),
-    # GROUP G
-    ("Mon Jun 15", "3:00 PM ET",  "Belgium",      "Egypt",        "Lumen Field",              "Seattle, USA"),
-    ("Mon Jun 15", "9:00 PM ET",  "Iran",         "New Zealand",  "SoFi Stadium",             "Inglewood, USA"),
-    ("Sun Jun 21", "3:00 PM ET",  "Belgium",      "Iran",         "SoFi Stadium",             "Inglewood, USA"),
-    ("Sun Jun 21", "9:00 PM ET",  "New Zealand",  "Egypt",        "BC Place",                 "Vancouver, Canada"),
-    ("Fri Jun 26", "11:00 PM ET", "Egypt",        "Iran",         "Lumen Field",              "Seattle, USA"),
-    ("Fri Jun 26", "11:00 PM ET", "New Zealand",  "Belgium",      "BC Place",                 "Vancouver, Canada"),
-    # GROUP H
-    ("Mon Jun 15", "12:00 PM ET", "Spain",        "Cape Verde",   "Mercedes-Benz Stadium",    "Atlanta, USA"),
-    ("Mon Jun 15", "6:00 PM ET",  "Saudi Arabia", "Uruguay",      "Hard Rock Stadium",        "Miami Gardens, USA"),
-    ("Sun Jun 21", "12:00 PM ET", "Spain",        "Saudi Arabia", "Mercedes-Benz Stadium",    "Atlanta, USA"),
-    ("Sun Jun 21", "6:00 PM ET",  "Uruguay",      "Cape Verde",   "Hard Rock Stadium",        "Miami Gardens, USA"),
-    ("Fri Jun 26", "8:00 PM ET",  "Cape Verde",   "Saudi Arabia", "NRG Stadium",              "Houston, USA"),
-    ("Fri Jun 26", "8:00 PM ET",  "Uruguay",      "Spain",        "Estadio Akron",            "Zapopan, Mexico"),
-    # GROUP I
-    ("Tue Jun 16", "3:00 PM ET",  "France",       "Senegal",      "MetLife Stadium",          "East Rutherford, USA"),
-    ("Tue Jun 16", "6:00 PM ET",  "Iraq",         "Norway",       "Gillette Stadium",         "Foxborough, USA"),
-    ("Mon Jun 22", "5:00 PM ET",  "France",       "Iraq",         "Lincoln Financial Field",  "Philadelphia, USA"),
-    ("Mon Jun 22", "8:00 PM ET",  "Norway",       "Senegal",      "MetLife Stadium",          "East Rutherford, USA"),
-    ("Fri Jun 26", "3:00 PM ET",  "Norway",       "France",       "Gillette Stadium",         "Foxborough, USA"),
-    ("Fri Jun 26", "3:00 PM ET",  "Senegal",      "Iraq",         "BMO Field",                "Toronto, Canada"),
-    # GROUP J
-    ("Tue Jun 16", "9:00 PM ET",  "Argentina",    "Algeria",      "Arrowhead Stadium",        "Kansas City, USA"),
-    ("Wed Jun 17", "12:00 AM ET", "Austria",      "Jordan",       "Levi's Stadium",           "Santa Clara, USA"),
-    ("Mon Jun 22", "1:00 PM ET",  "Argentina",    "Austria",      "AT&T Stadium",             "Arlington, USA"),
-    ("Mon Jun 22", "11:00 PM ET", "Jordan",       "Algeria",      "Levi's Stadium",           "Santa Clara, USA"),
-    ("Sat Jun 27", "10:00 PM ET", "Algeria",      "Austria",      "Arrowhead Stadium",        "Kansas City, USA"),
-    ("Sat Jun 27", "10:00 PM ET", "Jordan",       "Argentina",    "AT&T Stadium",             "Arlington, USA"),
-    # GROUP K
-    ("Wed Jun 17", "1:00 PM ET",  "Portugal",     "DR Congo",     "NRG Stadium",              "Houston, USA"),
-    ("Wed Jun 17", "10:00 PM ET", "Uzbekistan",   "Colombia",     "Estadio Azteca",           "Mexico City, Mexico"),
-    ("Tue Jun 23", "1:00 PM ET",  "Portugal",     "Uzbekistan",   "NRG Stadium",              "Houston, USA"),
-    ("Tue Jun 23", "10:00 PM ET", "Colombia",     "DR Congo",     "Estadio Akron",            "Zapopan, Mexico"),
-    ("Sat Jun 27", "7:30 PM ET",  "Colombia",     "Portugal",     "Hard Rock Stadium",        "Miami Gardens, USA"),
-    ("Sat Jun 27", "7:30 PM ET",  "DR Congo",     "Uzbekistan",   "Mercedes-Benz Stadium",    "Atlanta, USA"),
-    # GROUP L
-    ("Wed Jun 17", "4:00 PM ET",  "England",      "Croatia",      "AT&T Stadium",             "Arlington, USA"),
-    ("Wed Jun 17", "7:00 PM ET",  "Ghana",        "Panama",       "BMO Field",                "Toronto, Canada"),
-    ("Tue Jun 23", "4:00 PM ET",  "England",      "Ghana",        "Gillette Stadium",         "Foxborough, USA"),
-    ("Tue Jun 23", "7:00 PM ET",  "Panama",       "Croatia",      "BMO Field",                "Toronto, Canada"),
-    ("Sat Jun 27", "5:00 PM ET",  "Panama",       "England",      "MetLife Stadium",          "East Rutherford, USA"),
-    ("Sat Jun 27", "5:00 PM ET",  "Croatia",      "Ghana",        "Lincoln Financial Field",  "Philadelphia, USA"),
+    ("پنج‌شنبه ۲۱ خرداد", "3:00 PM", "Mexico", "South Africa", "استادیوم آزتکا", "مکزیکوسیتی"),
+    ("پنج‌شنبه ۲۱ خرداد", "10:00 PM", "South Korea", "Czechia", "استادیوم آکرون", "گوادالاخارا"),
+    ("جمعه ۲۲ خرداد", "3:00 PM", "Canada", "Bosnia", "BMO فیلد", "تورنتو"),
+    ("جمعه ۲۲ خرداد", "9:00 PM", "USA", "Paraguay", "سوفای استادیوم", "اینگلووود"),
+    ("شنبه ۲۳ خرداد", "3:00 PM", "Qatar", "Switzerland", "لوی‌ استادیوم", "سانتاکلارا"),
+    ("شنبه ۲۳ خرداد", "6:00 PM", "Brazil", "Morocco", "مت‌لایف استادیوم", "نیوجرسی"),
+    ("شنبه ۲۳ خرداد", "9:00 PM", "Haiti", "Scotland", "گیلت استادیوم", "فاکسبورو"),
+    ("یکشنبه ۲۴ خرداد", "12:00 PM", "Australia", "Turkiye", "BC پلیس", "ونکوور"),
+    ("یکشنبه ۲۴ خرداد", "1:00 PM", "Germany", "Curacao", "NRG استادیوم", "هیوستون"),
+    ("یکشنبه ۲۴ خرداد", "4:00 PM", "Netherlands", "Japan", "AT&T استادیوم", "آرلینگتون"),
+    ("یکشنبه ۲۴ خرداد", "7:00 PM", "Ivory Coast", "Ecuador", "لینکلن فاینانشیال فیلد", "فیلادلفیا"),
+    ("یکشنبه ۲۴ خرداد", "10:00 PM", "Sweden", "Tunisia", "استادیوم BBVA", "مونتری"),
+    ("دوشنبه ۲۵ خرداد", "12:00 PM", "Spain", "Cape Verde", "مرسدس-بنز استادیوم", "آتلانتا"),
+    ("دوشنبه ۲۵ خرداد", "3:00 PM", "Belgium", "Egypt", "لومن فیلد", "سیاتل"),
+    ("دوشنبه ۲۵ خرداد", "6:00 PM", "Saudi Arabia", "Uruguay", "هارد راک استادیوم", "مایامی"),
+    ("دوشنبه ۲۵ خرداد", "9:00 PM", "Iran", "New Zealand", "سوفای استادیوم", "اینگلووود"),
+    ("سه‌شنبه ۲۶ خرداد", "3:00 PM", "France", "Senegal", "مت‌لایف استادیوم", "نیوجرسی"),
+    ("سه‌شنبه ۲۶ خرداد", "6:00 PM", "Iraq", "Norway", "گیلت استادیوم", "فاکسبورو"),
+    ("سه‌شنبه ۲۶ خرداد", "9:00 PM", "Argentina", "Algeria", "اروهد استادیوم", "کانزاس سیتی"),
+    ("چهارشنبه ۲۷ خرداد", "12:00 AM", "Austria", "Jordan", "لوی‌ استادیوم", "سانتاکلارا"),
+    ("چهارشنبه ۲۷ خرداد", "1:00 PM", "Portugal", "DR Congo", "NRG استادیوم", "هیوستون"),
+    ("چهارشنبه ۲۷ خرداد", "4:00 PM", "England", "Croatia", "AT&T استادیوم", "آرلینگتون"),
+    ("چهارشنبه ۲۷ خرداد", "7:00 PM", "Ghana", "Panama", "BMO فیلد", "تورنتو"),
+    ("چهارشنبه ۲۷ خرداد", "10:00 PM", "Uzbekistan", "Colombia", "استادیوم آزتکا", "مکزیکوسیتی"),
+    ("پنج‌شنبه ۲۸ خرداد", "12:00 PM", "Czechia", "South Africa", "مرسدس-بنز استادیوم", "آتلانتا"),
+    ("پنج‌شنبه ۲۸ خرداد", "3:00 PM", "Switzerland", "Bosnia", "سوفای استادیوم", "اینگلووود"),
+    ("پنج‌شنبه ۲۸ خرداد", "6:00 PM", "Canada", "Qatar", "BC پلیس", "ونکوور"),
+    ("پنج‌شنبه ۲۸ خرداد", "9:00 PM", "Mexico", "South Korea", "استادیوم آکرون", "گوادالاخارا"),
+    ("جمعه ۲۹ خرداد", "3:00 PM", "USA", "Australia", "لومن فیلد", "سیاتل"),
+    ("جمعه ۲۹ خرداد", "6:00 PM", "Scotland", "Morocco", "گیلت استادیوم", "فاکسبورو"),
+    ("جمعه ۲۹ خرداد", "8:30 PM", "Brazil", "Haiti", "لینکلن فاینانشیال فیلد", "فیلادلفیا"),
+    ("جمعه ۲۹ خرداد", "11:00 PM", "Turkiye", "Paraguay", "لوی‌ استادیوم", "سانتاکلارا"),
+    ("شنبه ۳۰ خرداد", "1:00 PM", "Netherlands", "Sweden", "NRG استادیوم", "هیوستون"),
+    ("شنبه ۳۰ خرداد", "4:00 PM", "Germany", "Ivory Coast", "BMO فیلد", "تورنتو"),
+    ("شنبه ۳۰ خرداد", "8:00 PM", "Ecuador", "Curacao", "اروهد استادیوم", "کانزاس سیتی"),
+    ("یکشنبه ۳۱ خرداد", "12:00 AM", "Tunisia", "Japan", "استادیوم BBVA", "مونتری"),
+    ("یکشنبه ۳۱ خرداد", "12:00 PM", "Spain", "Saudi Arabia", "مرسدس-بنز استادیوم", "آتلانتا"),
+    ("یکشنبه ۳۱ خرداد", "3:00 PM", "Belgium", "Iran", "سوفای استادیوم", "اینگلووود"),
+    ("یکشنبه ۳۱ خرداد", "6:00 PM", "Uruguay", "Cape Verde", "هارد راک استادیوم", "مایامی"),
+    ("یکشنبه ۳۱ خرداد", "9:00 PM", "New Zealand", "Egypt", "BC پلیس", "ونکوور"),
+    ("دوشنبه ۱ تیر", "1:00 PM", "Argentina", "Austria", "AT&T استادیوم", "آرلینگتون"),
+    ("دوشنبه ۱ تیر", "5:00 PM", "France", "Iraq", "لینکلن فاینانشیال فیلد", "فیلادلفیا"),
+    ("دوشنبه ۱ تیر", "8:00 PM", "Norway", "Senegal", "مت‌لایف استادیوم", "نیوجرسی"),
+    ("دوشنبه ۱ تیر", "11:00 PM", "Jordan", "Algeria", "لوی‌ استادیوم", "سانتاکلارا"),
+    ("سه‌شنبه ۲ تیر", "1:00 PM", "Portugal", "Uzbekistan", "NRG استادیوم", "هیوستون"),
+    ("سه‌شنبه ۲ تیر", "4:00 PM", "England", "Ghana", "گیلت استادیوم", "فاکسبورو"),
+    ("سه‌شنبه ۲ تیر", "7:00 PM", "Panama", "Croatia", "BMO فیلد", "تورنتو"),
+    ("سه‌شنبه ۲ تیر", "10:00 PM", "Colombia", "DR Congo", "استادیوم آکرون", "گوادالاخارا"),
+    ("چهارشنبه ۳ تیر", "3:00 PM", "Switzerland", "Canada", "BC پلیس", "ونکوور"),
+    ("چهارشنبه ۳ تیر", "3:00 PM", "Bosnia", "Qatar", "لومن فیلد", "سیاتل"),
+    ("چهارشنبه ۳ تیر", "6:00 PM", "Scotland", "Brazil", "هارد راک استادیوم", "مایامی"),
+    ("چهارشنبه ۳ تیر", "6:00 PM", "Morocco", "Haiti", "مرسدس-بنز استادیوم", "آتلانتا"),
+    ("چهارشنبه ۳ تیر", "9:00 PM", "Czechia", "Mexico", "استادیوم آزتکا", "مکزیکوسیتی"),
+    ("چهارشنبه ۳ تیر", "9:00 PM", "South Africa", "South Korea", "استادیوم BBVA", "مونتری"),
+    ("پنج‌شنبه ۴ تیر", "4:00 PM", "Curacao", "Ivory Coast", "لینکلن فاینانشیال فیلد", "فیلادلفیا"),
+    ("پنج‌شنبه ۴ تیر", "4:00 PM", "Ecuador", "Germany", "مت‌لایف استادیوم", "نیوجرسی"),
+    ("پنج‌شنبه ۴ تیر", "7:00 PM", "Japan", "Sweden", "AT&T استادیوم", "آرلینگتون"),
+    ("پنج‌شنبه ۴ تیر", "7:00 PM", "Tunisia", "Netherlands", "اروهد استادیوم", "کانزاس سیتی"),
+    ("پنج‌شنبه ۴ تیر", "10:00 PM", "Turkiye", "USA", "سوفای استادیوم", "اینگلووود"),
+    ("پنج‌شنبه ۴ تیر", "10:00 PM", "Paraguay", "Australia", "لوی‌ استادیوم", "سانتاکلارا"),
+    ("جمعه ۵ تیر", "3:00 PM", "Norway", "France", "گیلت استادیوم", "فاکسبورو"),
+    ("جمعه ۵ تیر", "3:00 PM", "Senegal", "Iraq", "BMO فیلد", "تورنتو"),
+    ("جمعه ۵ تیر", "8:00 PM", "Cape Verde", "Saudi Arabia", "NRG استادیوم", "هیوستون"),
+    ("جمعه ۵ تیر", "8:00 PM", "Uruguay", "Spain", "استادیوم آکرون", "گوادالاخارا"),
+    ("جمعه ۵ تیر", "11:00 PM", "Egypt", "Iran", "لومن فیلد", "سیاتل"),
+    ("جمعه ۵ تیر", "11:00 PM", "New Zealand", "Belgium", "BC پلیس", "ونکوور"),
+    ("شنبه ۶ تیر", "5:00 PM", "Panama", "England", "مت‌لایف استادیوم", "نیوجرسی"),
+    ("شنبه ۶ تیر", "5:00 PM", "Croatia", "Ghana", "لینکلن فاینانشیال فیلد", "فیلادلفیا"),
+    ("شنبه ۶ تیر", "7:30 PM", "Colombia", "Portugal", "هارد راک استادیوم", "مایامی"),
+    ("شنبه ۶ تیر", "7:30 PM", "DR Congo", "Uzbekistan", "مرسدس-بنز استادیوم", "آتلانتا"),
+    ("شنبه ۶ تیر", "10:00 PM", "Algeria", "Austria", "اروهد استادیوم", "کانزاس سیتی"),
+    ("شنبه ۶ تیر", "10:00 PM", "Jordan", "Argentina", "AT&T استادیوم", "آرلینگتون"),
 ]
 
-# ─────────────────────────────────────────────
-# Helper: find which group a team belongs to
-# ─────────────────────────────────────────────
-def find_group(team_raw: str) -> str | None:
-    """Return group letter for a team name (ignoring flag emoji)."""
-    name = team_raw.strip().split(" ", 1)[-1]  # strip emoji
+
+def find_group(team_fa: str) -> str | None:
+    name = team_fa.split(" ", 1)[-1]
     for grp, members in GROUPS.items():
         for m in members:
-            if name.lower() in m.lower():
+            m_name = m.split(" ", 1)[-1]
+            if name == m_name:
                 return grp
     return None
 
 
-def get_team_matches(team_raw: str) -> list:
-    """Return all group stage matches for a given team."""
-    name = team_raw.strip().split(" ", 1)[-1].lower()
+def get_team_matches(team_fa: str) -> list:
+    name_fa = team_fa.split(" ", 1)[-1]
+    name_en = FA_TO_EN.get(name_fa, "")
     results = []
-    for m in MATCHES:
-        date, time, home, away, stadium, city = m
-        if name in home.lower() or name in away.lower():
-            results.append(m)
-    # deduplicate (some matches appear twice in data for diff groups)
     seen = set()
-    unique = []
-    for m in results:
-        key = (m[0], m[2], m[3])
-        if key not in seen:
-            seen.add(key)
-            unique.append(m)
-    return sorted(unique, key=lambda x: x[0])
+    for m in MATCHES:
+        date, time_et, home, away, stadium, city = m
+        if name_en.lower() in home.lower() or name_en.lower() in away.lower():
+            key = (date, home, away)
+            if key not in seen:
+                seen.add(key)
+                results.append(m)
+    return results
 
 
-# ─────────────────────────────────────────────
-# BOT HANDLERS
-# ─────────────────────────────────────────────
+async def check_membership(user_id: int, context) -> bool:
+    try:
+        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+        return member.status in [ChatMember.MEMBER, ChatMember.ADMINISTRATOR, ChatMember.OWNER]
+    except:
+        return False
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Send group selection keyboard."""
+    user_id = update.effective_user.id
+    if not await check_membership(user_id, context):
+        keyboard = [[
+            InlineKeyboardButton("📢 عضویت در کانال", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}"),
+            InlineKeyboardButton("✅ عضو شدم", callback_data="check_join"),
+        ]]
+        await update.message.reply_text(
+            f"⛔️ برای استفاده از بات باید عضو کانال ما باشی:\n\n{CHANNEL_ID}\n\nبعد از عضویت روی «✅ عضو شدم» بزن.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    await show_groups(update, context, is_message=True)
+
+
+async def show_groups(update, context, is_message=False):
     keyboard = []
     row = []
     for grp in sorted(GROUPS.keys()):
-        row.append(InlineKeyboardButton(f"Group {grp}", callback_data=f"grp_{grp}"))
+        row.append(InlineKeyboardButton(f"گروه {grp}", callback_data=f"grp_{grp}"))
         if len(row) == 4:
             keyboard.append(row)
             row = []
     if row:
         keyboard.append(row)
-
-    await update.message.reply_text(
-        "🏆 *FIFA World Cup 2026*\n\nیه گروه انتخاب کن تا تیم‌هاشو ببینی:",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    text = "🏆 *جام جهانی ۲۰۲۶*\n\nیه گروه انتخاب کن:"
+    markup = InlineKeyboardMarkup(keyboard)
+    if is_message:
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=markup)
+    else:
+        await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=markup)
 
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
+    user_id = update.effective_user.id
 
-    # ── Group selected → show teams ──
+    if data == "check_join":
+        if await check_membership(user_id, context):
+            await show_groups(update, context)
+        else:
+            await query.answer("❌ هنوز عضو نشدی!", show_alert=True)
+        return
+
+    if not await check_membership(user_id, context):
+        keyboard = [[
+            InlineKeyboardButton("📢 عضویت در کانال", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}"),
+            InlineKeyboardButton("✅ عضو شدم", callback_data="check_join"),
+        ]]
+        await query.edit_message_text(
+            f"⛔️ باید عضو کانال باشی:\n{CHANNEL_ID}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
     if data.startswith("grp_"):
         grp = data[4:]
         teams = GROUPS.get(grp, [])
-        keyboard = [
-            [InlineKeyboardButton(t, callback_data=f"team_{t}")]
-            for t in teams
-        ]
-        keyboard.append([InlineKeyboardButton("🔙 بازگشت به گروه‌ها", callback_data="back_groups")])
+        keyboard = [[InlineKeyboardButton(t, callback_data=f"team_{t}")] for t in teams]
+        keyboard.append([InlineKeyboardButton("🔙 بازگشت", callback_data="back_groups")])
         await query.edit_message_text(
             f"⚽ *گروه {grp}* — یه تیم انتخاب کن:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-    # ── Team selected → show matches ──
     elif data.startswith("team_"):
         team_raw = data[5:]
         matches = get_team_matches(team_raw)
         grp = find_group(team_raw)
-        name_clean = team_raw.split(" ", 1)[-1] if " " in team_raw else team_raw
-
         if not matches:
-            text = f"❌ بازی‌ای برای {team_raw} پیدا نشد."
+            text = "❌ بازی‌ای پیدا نشد."
         else:
             lines = [f"📋 *بازی‌های {team_raw}* — گروه {grp}\n"]
-            for i, (date, time, home, away, stadium, city) in enumerate(matches, 1):
-                vs = f"{home} vs {away}"
+            for i, (date, time_et, home, away, stadium, city) in enumerate(matches, 1):
+                home_fa = EN_TO_FA.get(home, home)
+                away_fa = EN_TO_FA.get(away, away)
+                iran_time = et_to_iran(time_et)
                 lines.append(
                     f"*بازی {i}*\n"
-                    f"📅 {date}  ⏰ {time}\n"
-                    f"⚔️ {vs}\n"
-                    f"🏟 {stadium}\n"
-                    f"📍 {city}\n"
+                    f"📅 {date}\n"
+                    f"⏰ ساعت ایران: {iran_time}\n"
+                    f"⚔️ {home_fa} vs {away_fa}\n"
+                    f"🏟 {stadium} — {city}\n"
                 )
             text = "\n".join(lines)
-
         keyboard = [
-            [InlineKeyboardButton(f"🔙 بازگشت به گروه {grp}", callback_data=f"grp_{grp}")],
+            [InlineKeyboardButton(f"🔙 گروه {grp}", callback_data=f"grp_{grp}")],
             [InlineKeyboardButton("🏠 منوی اصلی", callback_data="back_groups")],
         ]
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    # ── Back to group list ──
     elif data == "back_groups":
-        keyboard = []
-        row = []
-        for grp in sorted(GROUPS.keys()):
-            row.append(InlineKeyboardButton(f"Group {grp}", callback_data=f"grp_{grp}"))
-            if len(row) == 4:
-                keyboard.append(row)
-                row = []
-        if row:
-            keyboard.append(row)
-        await query.edit_message_text(
-            "🏆 *FIFA World Cup 2026*\n\nیه گروه انتخاب کن:",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await show_groups(update, context)
 
 
-# ─────────────────────────────────────────────
-# MAIN
-# ─────────────────────────────────────────────
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_callback))
-    print("✅ Bot is running... Press Ctrl+C to stop.")
+    print("Bot running...")
     app.run_polling()
 
 
